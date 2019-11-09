@@ -21,17 +21,51 @@ if __name__ == "__main__":
         evaluation_games.append(game)
 
     for game in evaluation_games:
-        if os.path.exists(f"results/{game}/continuous_results.txt") and \
-                os.path.exists(f"results/{game}/videos/100_DTRegressor_discounted_ContinuousBFS.mp4"):
+        if os.path.exists(f"results/{game}/continuous_results.txt"):
             with open(f"results/{game}/continuous_results.txt", "rb") as f:
                 results = pickle.load(f)
+                if results["ticks"][-1][-1] != 0:
+                    fm = results["forward_model"]
+                    fm._data_set = None
+                    with open(f"results/{game}/forward_model.txt", "wb") as fmf:
+                        pickle.dump(fm, fmf)
 
-                fm = results["forward_model"]
-                fm._data_set = None
-                with open(f"results/{game}/forward_model.txt", "wb") as fmf:
-                    pickle.dump(fm, fmf)
+                    sm = results["score_model"]
+                    sm._data_set = None
+                    with open(f"results/{game}/score_model.txt", "wb") as smf:
+                        pickle.dump(sm, smf)
 
-                sm = results["score_model"]
-                sm._data_set = None
-                with open(f"results/{game}/score_model.txt", "wb") as smf:
-                    pickle.dump(sm, smf)
+        if os.path.exists(f"results/{game}/continuous_learning.txt"):
+            with open(f"results/{game}/continuous_learning.txt", "rb") as results_file:
+                combined = pickle.load(results_file)
+        else:
+            combined = dict()
+        if os.path.exists(f"results/{game}/continuous_results_RHEA.txt"):
+            with open(f"results/{game}/continuous_results_RHEA.txt", "rb") as f:
+                results = pickle.load(f)
+                if results["ticks"][-1][-1] != 0:
+                    results.pop("forward_model", None)
+                    results.pop("score_model", None)
+                    results.pop("agent", None)
+                    combined["RHEA"] = results
+
+        if os.path.exists(f"results/{game}/continuous_results_RANDOM.txt"):
+            with open(f"results/{game}/continuous_results_RANDOM.txt", "rb") as f:
+                results = pickle.load(f)
+                if results["ticks"][-1][-1] != 0:
+                    results.pop("forward_model", None)
+                    results.pop("score_model", None)
+                    results.pop("agent", None)
+                    combined["Random"] = results
+
+        if os.path.exists(f"results/{game}/continuous_results.txt"):
+            with open(f"results/{game}/continuous_results.txt", "rb") as f:
+                results = pickle.load(f)
+                if results["ticks"][-1][-1] != 0:
+                    results.pop("forward_model", None)
+                    results.pop("score_model", None)
+                    results.pop("agent", None)
+                    combined["BFS"] = results
+
+        with open(f"results/{game}/continuous_learning.txt", "wb") as results_file:
+            pickle.dump(combined, results_file)

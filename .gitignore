@@ -60,7 +60,7 @@ target/
 
 *replays*.txt
 *.mp4
-*continuous_results.txt
+*continuous_results*.txt
 
 results/bait/lock.txt
 
@@ -69,3 +69,5 @@ figures/GVGAI/
 results/chipschallenge/videos_RHEA/replays_RHEA.txt
 
 results/bait/videos_RHEA/replays_RHEA.txt
+
+results/deceptizelda/continuous_learning.txt
