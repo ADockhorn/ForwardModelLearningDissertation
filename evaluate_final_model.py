@@ -113,10 +113,10 @@ if __name__ == "__main__":
 
     agents = [RandomAgent(), RHEAAgent(**RHEA_AGENT_PARAMETERS), BFSAgent(**BFS_AGENT_PARAMETERS)]
     for game_name in evaluation_games:
-        game_name = "decepticoins"
 
-        if not os.path.exists(f"results/{game_name}/videos/100_DTRegressor_discounted_ContinuousBFS.mp4"):
-            print(f"game {game_name} cannot be evaluated yet, since the BFS model is not trained")
+        if not os.path.exists(f"results/{game_name}/forward_model.txt"):
+            print(f"game {game_name} cannot be evaluated yet, since the BFS model is not trained yet")
+            continue
         if os.path.exists(f"results/{game_name}/lfm_results_lock.txt"):
             print(f"game {game_name} is evaluated by another thread")
             continue
