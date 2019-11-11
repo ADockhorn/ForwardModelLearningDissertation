@@ -53,14 +53,14 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
     save_results(game_name, results)
 
     replays = dict()
-    if os.path.exists(f"results/{game_name}/videos/replays_{AGENT_NAME}.txt"):
-        with open(f"results/{game_name}/videos/replays_{AGENT_NAME}.txt", "rb") as f:
+    if os.path.exists(f"results/{game_name}/videos_{AGENT_NAME}/replays.txt"):
+        with open(f"results/{game_name}/videos_{AGENT_NAME}/replays.txt", "rb") as f:
             replays = pickle.load(f)
     else:
         replays = {level: {rep: [] for rep in range(repetitions)} for level in range(n_levels)}
 
     for rep in range(repetitions):
-        for level in tqdm(levels, desc="levels", ncols=100):
+        for level in levels:
             if results["ticks"][level, rep] != 0:
                 continue
 
@@ -78,7 +78,7 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
 
             previous_observation = None
             tick = 0
-            for tick in trange(max_ticks, desc="ticks", ncols=100):
+            for tick in trange(max_ticks, desc=f"level {level}, rep {rep}, ticks", ncols=100):
                 ttl = axis.text(0.5, 1.01, f"{game_name} | total score = {total_score} | tick = {tick}",
                                 horizontalalignment='center',
                                 verticalalignment='bottom', transform=axis.transAxes)
@@ -95,26 +95,31 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
 
                 if previous_observation is not None and AGENT_NAME != "RANDOM":
                     fm.add_transition(previous_observation, current_action, observation.get_grid())
-                    if not fm.is_trained() or np.any(observation.get_grid().flatten() != fm.predict(previous_observation, current_action)):
-                        fm.fit()
+                    if tick % 100 == 0:
+                        if not fm.is_trained() or np.any(observation.get_grid().flatten() != fm.predict(previous_observation, current_action)):
+                            fm.fit()
 
                     if is_over and game.info["sso"].gameWinner == "PLAYER_WINS":
                         sm.add_transition(previous_observation, observation.get_grid(), score+1000)
                         results["game_won"][level, rep] = 1
                     else:
                         sm.add_transition(previous_observation, observation.get_grid(), score)
-                    sm.fit()
+
+                    if tick % 100 == 0:
+                        sm.fit()
 
                 if is_over:
                     break
 
                 previous_observation = observation.get_grid()
 
-            with open(f"results/{game_name}/videos_{AGENT_NAME}/replays_{AGENT_NAME}.txt", "wb") as f:
+            with open(f"results/{game_name}/videos_{AGENT_NAME}/replays.txt", "wb") as f:
                 pickle.dump(replays, f)
 
             results["ticks"][level, rep] = tick
             results["scores"][level, rep] = total_score
+            fm.fit()
+            sm.fit()
 
             anim = animation.ArtistAnimation(fig, ims, interval=100, blit=False, repeat=False)
             anim.save(f'results/{game_name}/videos_{AGENT_NAME}/{rep*len(levels)+level}_DTRegressor_discounted_Continuous_{AGENT_NAME}.mp4')
@@ -148,10 +153,11 @@ if __name__ == "__main__":
 
    # evaluation_games = ["decepticoins"] # ["bait", "decepticoins", "painter"]
     for game_name in tqdm(evaluation_games, desc="games", ncols=100):
-        AGENT_NAME = "RHEA"
-        #agent = BFSAgent(**BFS_AGENT_PARAMETERS)
+        AGENT_NAME = "BFS"
+        agent = BFSAgent(**BFS_AGENT_PARAMETERS)
+        agent._expansions = 100
         #agent = RandomAgent()
-        agent = RHEAAgent(**RHEA_AGENT_PARAMETERS)
+        #agent = RHEAAgent(**RHEA_AGENT_PARAMETERS)
 
         # setup file paths for the results
         if not os.path.exists(f"results/{game_name}/"):
@@ -159,6 +165,8 @@ if __name__ == "__main__":
         if not os.path.exists(f"results/{game_name}/videos_{AGENT_NAME}"):
             os.mkdir(f"results/{game_name}/videos_{AGENT_NAME}")
         if os.path.exists(f"results/{game_name}/continuous_results_lock_{AGENT_NAME}.txt"):
+            continue
+        if os.path.exists(f"results/{game_name}/forward_model.txt"):
             continue
         else:
             with open(f"results/{game_name}/continuous_results_lock_{AGENT_NAME}.txt", "wb") as f:
