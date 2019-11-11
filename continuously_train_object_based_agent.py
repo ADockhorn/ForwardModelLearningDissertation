@@ -6,6 +6,7 @@ import numpy as np
 from sklearn.tree import DecisionTreeClassifier
 
 from abstractclasses.AbstractNeighborhoodPattern import SquareNeighborhoodPattern
+from agents.BFSObjectAgent import BFSObjectAgent
 from models.globalscoremodel import GlobalScoreModel
 from models.localforwardmodel import LocalForwardModel
 from games.GVGAIConstants import get_images, get_object_dict
@@ -24,30 +25,30 @@ from tqdm import tqdm, trange
 import random
 from typing import List
 
+from models.objectforwardmodel import ObjectBasedForwardModel
+
 
 def load_results(game_name: str):
-    with open(f"results/{game_name}/continuous_results_{AGENT_NAME}.txt", "rb") as f:
+    with open(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt", "rb") as f:
         return pickle.load(f)
 
 
 def save_results(game_name, results):
-    with open(f"results/{game_name}/continuous_results_{AGENT_NAME}.txt", "wb") as f:
+    with open(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt", "wb") as f:
         pickle.dump(results, f)
 
 
-def continuously_train_model(agent, fm, game_name: str, levels: List[int], version: int, sm):
+def continuously_train_model(agent, fm, game_name: str, levels: List[int], version: int):
     logging.debug("train forward model")
 
     max_ticks = 2000
     repetitions = 20
     n_levels = 5
 
-    if os.path.exists(f"results/{game_name}/continuous_results_{AGENT_NAME}.txt"):
+    if os.path.exists(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt"):
         results = load_results(game_name)
         fm = results["forward_model"]
-        sm = results["score_model"]
-        agent.set_forward_model(fm)
-        agent.set_score_model(sm)
+        agent.set_forward_model(forward_model)
     else:
         results = {"scores": np.zeros((n_levels, repetitions)),
                    "ticks": np.zeros((n_levels, repetitions)),
@@ -55,8 +56,8 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
     save_results(game_name, results)
 
     replays = dict()
-    if os.path.exists(f"results/{game_name}/videos_{AGENT_NAME}/replays.txt"):
-        with open(f"results/{game_name}/videos_{AGENT_NAME}/replays.txt", "rb") as f:
+    if os.path.exists(f"results/{game_name}/ob_videos_{AGENT_NAME}/replays.txt"):
+        with open(f"results/{game_name}/ob_videos_{AGENT_NAME}/replays.txt", "rb") as f:
             replays = pickle.load(f)
     else:
         replays = {level: {rep: [] for rep in range(repetitions)} for level in range(n_levels)}
@@ -87,7 +88,7 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
                 ims.append([plt.imshow(sso.image), ttl])
 
                 if fm.is_trained():
-                    current_action = agent.get_next_action(observation, game.get_actions())
+                    current_action = agent.get_next_action(sso, game.get_actions())
                 else:
                     current_action = random.choice(game.get_actions())
 
@@ -96,41 +97,29 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
                 total_score += score
 
                 if previous_observation is not None and AGENT_NAME != "RANDOM":
-                    fm.add_transition(previous_observation, current_action, observation.get_grid())
+                    fm.add_transitions(previous_observation, current_action, sso, score)
                     if tick % 100 == 0:
-                        if not fm.is_trained() or np.any(observation.get_grid().flatten() != fm.predict(previous_observation, current_action)):
-                            fm.fit()
-
-                    if is_over and game.info["sso"].gameWinner == "PLAYER_WINS":
-                        sm.add_transition(previous_observation, observation.get_grid(), score+1000)
-                        results["game_won"][level, rep] = 1
-                    else:
-                        sm.add_transition(previous_observation, observation.get_grid(), score)
-
-                    if tick % 100 == 0:
-                        sm.fit()
+                        fm.fit()
 
                 if is_over:
                     break
 
-                previous_observation = observation.get_grid()
+                previous_observation = sso
 
-            with open(f"results/{game_name}/videos_{AGENT_NAME}/replays.txt", "wb") as f:
+            with open(f"results/{game_name}/ob_videos_{AGENT_NAME}/replays.txt", "wb") as f:
                 pickle.dump(replays, f)
 
             results["ticks"][level, rep] = tick
             results["scores"][level, rep] = total_score
             fm.fit()
-            sm.fit()
 
             anim = animation.ArtistAnimation(fig, ims, interval=100, blit=False, repeat=False)
-            anim.save(f'results/{game_name}/videos_{AGENT_NAME}/{rep*len(levels)+level}_DTRegressor_discounted_Continuous_{AGENT_NAME}.mp4')
+            anim.save(f'results/{game_name}/ob_videos_{AGENT_NAME}/{rep*len(levels)+level}_DTRegressor_discounted_Continuous_{AGENT_NAME}.mp4')
             plt.close()
             game.close()
 
             agent.re_initialize()
             results["agent"] = agent
-            results["score_model"] = sm
             results["forward_model"] = fm
             save_results(game_name, results)
 
@@ -144,7 +133,6 @@ if __name__ == "__main__":
 
     agents = [RandomAgent(), RHEAAgent(**RHEA_AGENT_PARAMETERS), BFSAgent(**BFS_AGENT_PARAMETERS)]
 
-    # filter games that have too complex state representations and games that do not provide 5 levels
     evaluation_games = []
     for game in grid_based_games:
         n_levels = len([env_spec.id for env_spec in envs.registry.all() if env_spec.id.startswith(f"gvgai-{game}-")])
@@ -153,41 +141,30 @@ if __name__ == "__main__":
             continue
         evaluation_games.append(game)
 
-   # evaluation_games = ["decepticoins"] # ["bait", "decepticoins", "painter"]
     for game_name in tqdm(evaluation_games, desc="games", ncols=100):
         AGENT_NAME = "BFS"
-        agent = BFSAgent(**BFS_AGENT_PARAMETERS)
+        agent = BFSObjectAgent(**BFS_AGENT_PARAMETERS)
         agent._expansions = 100
-        #agent = RandomAgent()
-        #agent = RHEAAgent(**RHEA_AGENT_PARAMETERS)
 
         # setup file paths for the results
         if not os.path.exists(f"results/{game_name}/"):
             os.mkdir(f"results/{game_name}/")
-        if not os.path.exists(f"results/{game_name}/videos_{AGENT_NAME}"):
-            os.mkdir(f"results/{game_name}/videos_{AGENT_NAME}")
-        if os.path.exists(f"results/{game_name}/continuous_results_lock_{AGENT_NAME}.txt"):
+        if not os.path.exists(f"results/{game_name}/ob_videos_{AGENT_NAME}"):
+            os.mkdir(f"results/{game_name}/ob_videos_{AGENT_NAME}")
+        if os.path.exists(f"results/{game_name}/ob_continuous_results_lock_{AGENT_NAME}.txt"):
             continue
-        if os.path.exists(f"results/{game_name}/forward_model.txt"):
+        if os.path.exists(f"results/{game_name}/ob_forward_model.txt"):
             continue
         else:
-            with open(f"results/{game_name}/continuous_results_lock_{AGENT_NAME}.txt", "wb") as f:
+            with open(f"results/{game_name}/ob_continuous_results_lock_{AGENT_NAME}.txt", "wb") as f:
                 pickle.dump([0], f)
 
         print(f"processing {game_name}")
 
-        forward_model = LocalForwardModel(DecisionTreeClassifier(), SquareNeighborhoodPattern(3),
-                                          possibleObservations=np.append(
-                                              np.array(list(get_object_dict(game_name).values())),
-                                              np.array(["0", "1", "2", "3", "4", "5", "x"])))
-        score_model = GlobalScoreModel(possible_observations=np.append(np.array(list(get_object_dict(game_name).values())),
-                                                                       np.array(["0", "1", "2", "3", "4", "5", "x"])))
-
+        forward_model = ObjectBasedForwardModel(DecisionTreeClassifier, [])
         agent.set_forward_model(forward_model)
-        agent.set_score_model(score_model)
 
-        continuously_train_model(agent, forward_model, game_name=game_name, levels=[0, 1, 2, 3, 4], version=0,
-                                 sm=score_model)
+        continuously_train_model(agent, forward_model, game_name=game_name, levels=[0, 1, 2, 3, 4], version=0)
 
-        if os.path.exists(f"results/{game_name}/continuous_results_lock_{AGENT_NAME}.txt"):
-            os.remove(f"results/{game_name}/continuous_results_lock_{AGENT_NAME}.txt")
+        if os.path.exists(f"results/{game_name}/ob_continuous_results_lock_{AGENT_NAME}.txt"):
+            os.remove(f"results/{game_name}/ob_continuous_results_lock_{AGENT_NAME}.txt")

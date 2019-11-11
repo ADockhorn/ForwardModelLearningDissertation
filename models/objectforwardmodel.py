@@ -39,10 +39,18 @@ class ObjectBasedForwardModel:
         self.to_predict = dict()
         self.training_data = dict()
         self.avatar_itypes = set()
+        self.immovable_itypes = set()
+        self._is_trained = False
+
         self.score_model = LinearRegression()
         self.score_training_data = np.empty((0, 41))
 
+    def is_trained(self):
+        return self._is_trained
+
     def fit(self):
+        self._is_trained = True
+
         self.score_model.fit(self.score_training_data[:, :-1], self.score_training_data[:, -1])
         for itype in self.training_data:
             if len(self.training_data[itype]) > 0:
@@ -54,6 +62,9 @@ class ObjectBasedForwardModel:
                         self.classifiers[itype][2].fit(self.training_data[itype][:, :-4], self.training_data[itype][:, -2])
                         self.classifiers[itype][3].fit(self.training_data[itype][:, :-4], self.training_data[itype][:, -1])
                         self.to_predict[itype] = True
+                    elif itype in self.immovable_itypes:
+                        self.classifiers[itype][2].fit(self.training_data[itype][:, :-1], self.training_data[itype][:, -1])
+                        self.to_predict[itype] = self.to_predict[itype] or len(np.unique(self.training_data[itype][:, -1])) != 1
                     else:
                         self.classifiers[itype][0].fit(self.training_data[itype][:, :-3], self.training_data[itype][:, -3])
                         self.classifiers[itype][1].fit(self.training_data[itype][:, :-3], self.training_data[itype][:, -2])
@@ -79,6 +90,11 @@ class ObjectBasedForwardModel:
 
                         self.classifiers[itype] = [itype_pred, x_pred, y_pred, death_pred]
                         self.to_predict[itype] = True
+                    elif itype in self.immovable_itypes:
+                        death_pred = self.base_classifier()
+                        death_pred.fit(self.training_data[itype][:, :-1], self.training_data[itype][:, -1])
+                        self.classifiers[itype] = [None, None, death_pred]
+                        self.to_predict[itype] = len(np.unique(self.training_data[itype][:, -1])) != 1
                     else:
                         x_pred = self.base_classifier()
                         y_pred = self.base_classifier()
@@ -133,14 +149,17 @@ class ObjectBasedForwardModel:
 
             entry = [x_grid, y_grid, neighbor_up, neighbor_down, neighbor_left, neighbor_right]
             if object_id != avatar:
-                entry.extend([x_grid - avatar_x, y_grid - avatar_y, action])
+                if objectinfo["itype"] in self.immovable_itypes:
+                    entry.extend([action])
+                else:
+                    entry.extend([x_grid - avatar_x, y_grid - avatar_y, action])
             else:
                 entry.extend([action])
 
-
             if self.classifiers[objectinfo["itype"]][-1].predict(np.array(entry).reshape(1, -1))[0]:
-                x_grid = x_grid + self.classifiers[objectinfo["itype"]][-3].predict(np.array(entry).reshape(1, -1))[0]
-                y_grid = y_grid + self.classifiers[objectinfo["itype"]][-2].predict(np.array(entry).reshape(1, -1))[0]
+                if objectinfo["itype"] not in self.immovable_itypes:
+                    x_grid = x_grid + self.classifiers[objectinfo["itype"]][-3].predict(np.array(entry).reshape(1, -1))[0]
+                    y_grid = y_grid + self.classifiers[objectinfo["itype"]][-2].predict(np.array(entry).reshape(1, -1))[0]
                 if objectinfo["itype"] in self.avatar_itypes:
                     pred_itype = self.classifiers[objectinfo["itype"]][-4].predict(np.array(entry).reshape(1, -1))[0]
                     if pred_itype != objectinfo["itype"]:
@@ -168,12 +187,13 @@ class ObjectBasedForwardModel:
         living_objects = [0]*20
         died_objects_per_type = [0]*20
 
-        immovable = [element.obsID for type in previous_observation.immovablePositions for element in type if element is not None]
+        immovable_itypes = {element.itype for type in previous_observation.immovablePositions for element in type if element is not None}
+        self.immovable_itypes = self.immovable_itypes.union(immovable_itypes)
 
-        old_object_state = {element["obsID"]: element for row in previous_observation.origObservationGrid for cell in row for element in cell if element["obsID"] not in immovable}
-        new_object_state = {element["obsID"]: element for row in sso.origObservationGrid for cell in row for element in cell if element["obsID"] not in immovable}
-        old_grid_position = {element["obsID"]: [i, j] for i, row in enumerate(previous_observation.origObservationGrid) for j, cell in enumerate(row) for element in cell if element["obsID"] not in immovable}
-        new_grid_position = {element["obsID"]: [i, j] for i, row in enumerate(sso.origObservationGrid) for j, cell in enumerate(row) for element in cell if element["obsID"] not in immovable}
+        old_object_state = {element["obsID"]: element for row in previous_observation.origObservationGrid for cell in row for element in cell}
+        new_object_state = {element["obsID"]: element for row in sso.origObservationGrid for cell in row for element in cell}
+        old_grid_position = {element["obsID"]: [i, j] for i, row in enumerate(previous_observation.origObservationGrid) for j, cell in enumerate(row) for element in cell}
+        new_grid_position = {element["obsID"]: [i, j] for i, row in enumerate(sso.origObservationGrid) for j, cell in enumerate(row) for element in cell}
 
         all_objects = set(old_object_state.keys()).union(set(new_object_state.keys()))
         for obj in all_objects:
@@ -236,11 +256,10 @@ class ObjectBasedForwardModel:
             entry = [x_grid, y_grid, neighbor_up, neighbor_down, neighbor_left, neighbor_right]
             if obj == avatar:
                 entry.extend([current_action, new_object_state[obj]["itype"], x_diff, y_diff, sso.isAvatarAlive])
+            elif old_object_state[obj]["itype"] in self.immovable_itypes:
+                entry.extend([current_action, obj not in destroyed_objects])
             else:
-                if obj in destroyed_objects:
-                    entry.extend([x_grid - avatar_x, y_grid - avatar_y, current_action, x_diff, y_diff, False])
-                else:
-                    entry.extend([x_grid - avatar_x, y_grid - avatar_y, current_action, x_diff, y_diff, True])
+                entry.extend([x_grid - avatar_x, y_grid - avatar_y, current_action, x_diff, y_diff, obj not in destroyed_objects])
 
             if old_object_state[obj]["itype"] in new_training_data:
                 new_training_data[old_object_state[obj]["itype"]].append(entry)
@@ -266,10 +285,10 @@ if __name__ == "__main__":
 
     fm = ObjectBasedForwardModel(DecisionTreeClassifier, [])
 
-    for level in range(1):
+    for level in range(3):
         game = GVGAIEnvironment(game_name, level, 0)
 
-        for rep in range(5):
+        for rep in range(2):
             observation, total_score, _, sso = game.reset()
             previous_observation = None
             tick = 0
@@ -302,7 +321,7 @@ if __name__ == "__main__":
     bfs._expansions = 100
     bfs.set_forward_model(fm)
 
-    for level in range(1):
+    for level in range(3):
         game = GVGAIEnvironment(game_name, level, 0)
         fig, axis = plt.subplots(1, 1)
         plt.axis("off")
