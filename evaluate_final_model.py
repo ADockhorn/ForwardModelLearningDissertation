@@ -115,7 +115,7 @@ if __name__ == "__main__":
     for game_name in evaluation_games:
 
         if not os.path.exists(f"results/{game_name}/forward_model.txt"):
-            print(f"game {game_name} cannot be evaluated yet, since the BFS model is not trained yet")
+            print(f"game {game_name} cannot be evaluated yet, since the BFS model is not trained")
             continue
         if os.path.exists(f"results/{game_name}/lfm_results_lock.txt"):
             print(f"game {game_name} is evaluated by another thread")
@@ -136,5 +136,3 @@ if __name__ == "__main__":
 
         if os.path.exists(f"results/{game_name}/lfm_results_lock.txt"):
             os.remove(f"results/{game_name}/lfm_results_lock.txt")
-
-        break
