@@ -2,6 +2,8 @@ import gym
 import gym_gvgai
 import matplotlib.pyplot as plt
 import numpy as np
+import time
+from tqdm import trange
 
 from sklearn.tree import DecisionTreeClassifier
 
@@ -24,13 +26,9 @@ from tqdm import tqdm, trange
 import random
 from typing import List
 from sklearn.tree import DecisionTreeClassifier
-
-
-class ObjectGameState:
-    def __init__(self, next_state_lists, width, height):
-        self.state = next_state_lists
-        self.width = width
-        self.height = height
+from sklearn.linear_model import LinearRegression
+from agents.BFSObjectAgent import BFSObjectAgent
+from models.objectgamestate import ObjectGameState
 
 
 class ObjectBasedForwardModel:
@@ -38,10 +36,14 @@ class ObjectBasedForwardModel:
         self.trained = False
         self.base_classifier = classifier
         self.classifiers = dict()
+        self.to_predict = dict()
         self.training_data = dict()
         self.avatar_itypes = set()
+        self.score_model = LinearRegression()
+        self.score_training_data = np.empty((0, 41))
 
     def fit(self):
+        self.score_model.fit(self.score_training_data[:, :-1], self.score_training_data[:, -1])
         for itype in self.training_data:
             if len(self.training_data[itype]) > 0:
                 if itype in self.classifiers:
@@ -51,10 +53,16 @@ class ObjectBasedForwardModel:
                         self.classifiers[itype][1].fit(self.training_data[itype][:, :-4], self.training_data[itype][:, -3])
                         self.classifiers[itype][2].fit(self.training_data[itype][:, :-4], self.training_data[itype][:, -2])
                         self.classifiers[itype][3].fit(self.training_data[itype][:, :-4], self.training_data[itype][:, -1])
+                        self.to_predict[itype] = True
                     else:
                         self.classifiers[itype][0].fit(self.training_data[itype][:, :-3], self.training_data[itype][:, -3])
                         self.classifiers[itype][1].fit(self.training_data[itype][:, :-3], self.training_data[itype][:, -2])
                         self.classifiers[itype][2].fit(self.training_data[itype][:, :-3], self.training_data[itype][:, -1])
+
+                        self.to_predict[itype] = self.to_predict[itype] or \
+                                                 len(np.unique(self.training_data[itype][:, -3])) != 1 or \
+                                                 len(np.unique(self.training_data[itype][:, -2])) != 1 or \
+                                                 len(np.unique(self.training_data[itype][:, -1])) != 1
                     pass
                 else:
                     # create new classifiers
@@ -70,6 +78,7 @@ class ObjectBasedForwardModel:
                         death_pred.fit(self.training_data[itype][:, :-4], self.training_data[itype][:, -1])
 
                         self.classifiers[itype] = [itype_pred, x_pred, y_pred, death_pred]
+                        self.to_predict[itype] = True
                     else:
                         x_pred = self.base_classifier()
                         y_pred = self.base_classifier()
@@ -80,6 +89,9 @@ class ObjectBasedForwardModel:
                         death_pred.fit(self.training_data[itype][:, :-3], self.training_data[itype][:, -1])
 
                         self.classifiers[itype] = [x_pred, y_pred, death_pred]
+                        self.to_predict[itype] = len(np.unique(self.training_data[itype][:, -3])) != 1 or \
+                                                 len(np.unique(self.training_data[itype][:, -2])) != 1 or \
+                                                 len(np.unique(self.training_data[itype][:, -1])) != 1
         self.trained = True
 
     def predict(self, sso, action):
@@ -105,8 +117,15 @@ class ObjectBasedForwardModel:
 
         next_state = [[[] for j in range(height)] for i in range(width)]
 
+        living_objects = [0]*20
+        died_objects_per_type = [0]*20
+
         for object_id, [objectinfo, x_grid, y_grid] in objects.items():
-            print(object_id)
+            living_objects[objectinfo["itype"]] += 1
+            if objectinfo["itype"] not in self.to_predict or self.to_predict[objectinfo["itype"]] is False:
+                next_state[x_grid][y_grid].append(objectinfo)
+                continue
+
             neighbor_up = max([element["itype"] for element in state[x_grid][y_grid-1]], default=-1) if y_grid-1 >= 0 else -1
             neighbor_down = max([element["itype"] for element in state[x_grid][y_grid+1]], default=-1) if y_grid+1 < height else -1
             neighbor_left = max([element["itype"] for element in state[x_grid-1][y_grid]], default=-1) if x_grid-1 >= 0 else -1
@@ -123,32 +142,45 @@ class ObjectBasedForwardModel:
                 x_grid = x_grid + self.classifiers[objectinfo["itype"]][-3].predict(np.array(entry).reshape(1, -1))[0]
                 y_grid = y_grid + self.classifiers[objectinfo["itype"]][-2].predict(np.array(entry).reshape(1, -1))[0]
                 if objectinfo["itype"] in self.avatar_itypes:
-                    objectinfo["itype"] = self.classifiers[objectinfo["itype"]][-4].predict(np.array(entry).reshape(1, -1))[0]
+                    pred_itype = self.classifiers[objectinfo["itype"]][-4].predict(np.array(entry).reshape(1, -1))[0]
+                    if pred_itype != objectinfo["itype"]:
+                        objectinfo["itype"] = pred_itype
+                        died_objects_per_type[pred_itype] += 1
                 if 0 <= x_grid < width and 0 <= y_grid < height:
                     next_state[x_grid][y_grid].append(objectinfo)
                 else:
-                    print("out of bounce")
+                    pass
+                    #print("out of bounce")
             else:
-                print("object died")
-        return ObjectGameState(next_state, width, height), self.predict_score(None)
+                died_objects_per_type[objectinfo["itype"]] += 1
+                #print("object died")
 
-    def predict_score(self, object_changes):
-        return 0
+        return ObjectGameState(next_state, width, height), self.predict_score(living_objects, died_objects_per_type)
 
-    def add_transitions(self, previous_observation, current_action, sso):
+    def predict_score(self, living_objects, died_objects):
+        return self.score_model.predict(np.array([living_objects + died_objects]))
+
+    def add_transitions(self, previous_observation, current_action, sso, score):
         new_objects = []
         destroyed_objects = []
         updated_objects = []
 
-        old_object_state = {element["obsID"]: element for row in previous_observation.origObservationGrid for cell in row for element in cell}
-        new_object_state = {element["obsID"]: element for row in sso.origObservationGrid for cell in row for element in cell}
-        old_grid_position = {element["obsID"]: [i, j] for i, row in enumerate(previous_observation.origObservationGrid) for j, cell in enumerate(row) for element in cell}
-        new_grid_position = {element["obsID"]: [i, j] for i, row in enumerate(sso.origObservationGrid) for j, cell in enumerate(row) for element in cell}
+        living_objects = [0]*20
+        died_objects_per_type = [0]*20
+
+        immovable = [element.obsID for type in previous_observation.immovablePositions for element in type if element is not None]
+
+        old_object_state = {element["obsID"]: element for row in previous_observation.origObservationGrid for cell in row for element in cell if element["obsID"] not in immovable}
+        new_object_state = {element["obsID"]: element for row in sso.origObservationGrid for cell in row for element in cell if element["obsID"] not in immovable}
+        old_grid_position = {element["obsID"]: [i, j] for i, row in enumerate(previous_observation.origObservationGrid) for j, cell in enumerate(row) for element in cell if element["obsID"] not in immovable}
+        new_grid_position = {element["obsID"]: [i, j] for i, row in enumerate(sso.origObservationGrid) for j, cell in enumerate(row) for element in cell if element["obsID"] not in immovable}
 
         all_objects = set(old_object_state.keys()).union(set(new_object_state.keys()))
         for obj in all_objects:
             if obj in old_object_state:
+                living_objects[old_object_state[obj]["itype"]] += 1
                 if obj not in new_object_state:
+                    died_objects_per_type[old_object_state[obj]["itype"]] += 1
                     destroyed_objects.append(obj)
                 else:
                     updated_objects.append(obj)
@@ -186,10 +218,11 @@ class ObjectBasedForwardModel:
         for obj in all_objects:
             if obj in new_objects:
                 continue
-            if obj == prev_avatar:
-                x_grid_new, y_grid_new = new_grid_position[avatar]
-            else:
-                x_grid_new, y_grid_new = new_grid_position.get(obj, old_grid_position[obj])
+            if obj == prev_avatar and obj != avatar:
+                continue
+                #x_grid_new, y_grid_new = new_grid_position[avatar]
+            #else:
+            x_grid_new, y_grid_new = new_grid_position.get(obj, old_grid_position[obj])
 
             x_grid, y_grid = old_grid_position[obj]
             x_diff = x_grid_new - x_grid
@@ -220,6 +253,7 @@ class ObjectBasedForwardModel:
             else:
                 self.training_data[i] = np.array(new_training_data[i])
 
+        self.score_training_data = np.unique(np.concatenate((np.array([living_objects+died_objects_per_type+[int(score)]]), self.score_training_data)), axis=0)
 
     def get_model(self):
         pass
@@ -227,34 +261,70 @@ class ObjectBasedForwardModel:
 
 if __name__ == "__main__":
 
-    # evaluation_games = ["decepticoins"] # ["bait", "decepticoins", "painter"]
-    game_name = "bait"
+    game_name = "decepticoins"
     agent = RandomAgent()
 
     fm = ObjectBasedForwardModel(DecisionTreeClassifier, [])
-    game = GVGAIEnvironment(game_name, 0, 0)
 
-    observation, total_score, _, sso = game.reset()
+    for level in range(1):
+        game = GVGAIEnvironment(game_name, level, 0)
 
-    previous_observation = None
-    tick = 0
-    for tick in range(1000):
-        current_action = random.choice(game.get_actions())
-        observation, score, is_over, sso = game.step(current_action)
-        #observation, score, is_over, sso = game.step(3)
-        #observation, score, is_over, sso = game.step(2)
-        #observation, score, is_over, sso = game.step(3)
-        #observation, score, is_over, previous_observation = game.step(1)
-        #observation, score, is_over, sso = game.step(3)
+        for rep in range(5):
+            observation, total_score, _, sso = game.reset()
+            previous_observation = None
+            tick = 0
+            training_time = 0
+            for tick in range(200):
+                current_action = random.choice(game.get_actions())
+                observation, score, is_over, sso = game.step(current_action)
 
-        total_score += score
+                total_score += score
+                start_time = time.time()
+                if previous_observation is not None:
+                    fm.add_transitions(previous_observation, current_action, sso, score)
+                end_time = time.time()
+                training_time += end_time - start_time
 
-        if previous_observation is not None:
-            fm.add_transitions(previous_observation, current_action, sso)
-            if tick % 10 == 0:
-                fm.fit()
+                if is_over:
+                    break
 
-        if is_over:
-            break
+                previous_observation = sso
+            print("points", total_score, "ticks", tick, "mean_time", training_time/tick)
+        game.close()
+    fm.fit()
 
-        previous_observation = sso
+    print()
+    print("now evaluate agent")
+    #set up agent
+    from agents.AgentParameters import BFS_AGENT_PARAMETERS
+
+    bfs = BFSObjectAgent(**BFS_AGENT_PARAMETERS)
+    bfs._expansions = 100
+    bfs.set_forward_model(fm)
+
+    for level in range(1):
+        game = GVGAIEnvironment(game_name, level, 0)
+        fig, axis = plt.subplots(1, 1)
+        plt.axis("off")
+        ims = []
+
+        observation, total_score, _, sso = game.reset()
+        search_time = 0
+        for tick in trange(200, ncols=150):
+            ims.append([plt.imshow(sso.image)])
+
+            start_time = time.time()
+            current_action = bfs.get_next_action(sso, [1, 2, 3, 4])
+            end_time = time.time()
+
+            observation, score, is_over, sso = game.step(current_action)
+            total_score += score
+            search_time += end_time - start_time
+
+            if is_over:
+                break
+
+        print("points", total_score, "ticks", tick, "mean_time", search_time / tick)
+        anim = animation.ArtistAnimation(fig, ims, interval=100, blit=False, repeat=False)
+        anim.save(f'test_{level}.mp4')
+        game.close()

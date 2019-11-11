@@ -4,9 +4,11 @@ import math
 import random
 
 from abstractclasses.AbstractForwardModelAgent import AbstractForwardModelAgent
+from models.objectgamestate import ObjectGameState
+from copy import deepcopy
 
 
-class BFSAgent(AbstractForwardModelAgent):
+class BFSObjectAgent(AbstractForwardModelAgent):
 
     def __init__(self, expansions, discount_factor=1.0, forward_model=None, score_model=None):
         super().__init__(forward_model, score_model)
@@ -20,7 +22,19 @@ class BFSAgent(AbstractForwardModelAgent):
         self.visited_states = dict()
 
     def get_next_action(self, state, actions):
-        state_id = state.get_identifier()
+        """
+        candidates = []
+        to_expand = [[[], 0, ObjectGameState(state.origObservationGrid, state.observationGrid.shape[2], state.observationGrid.shape[1])]]
+        for i in range(self._expansions):
+            if len(to_expand) == 0:
+                break
+            new_candidates = self.expand(to_expand.pop(0), actions)
+            for new_candidate in new_candidates:
+                to_expand.append(new_candidate)
+                candidates.append(new_candidate)
+        """
+        state = ObjectGameState(state.origObservationGrid, state.observationGrid.shape[2], state.observationGrid.shape[1])
+        state_id = state.string
         if state_id in self.visited_states:
             self.visited_states[state_id] += 1
         else:
@@ -36,7 +50,7 @@ class BFSAgent(AbstractForwardModelAgent):
             for new_candidate in new_candidates:
                 for candidate in unique_candidates:
                     # if score and state is the same, don't add this to the search
-                    if new_candidate[1] == candidate[1] and np.array_equal(new_candidate[2].get_grid(), candidate[2].get_grid()):
+                    if new_candidate[1] == candidate[1] and new_candidate[2].string == candidate[2].string:
                         break
                 else:
                     unique_candidates.append(new_candidate)
@@ -52,23 +66,18 @@ class BFSAgent(AbstractForwardModelAgent):
     def expand(self, expandable, actions):
 
         action_seq, score, state = expandable
-        prev_obs = state.get_grid()
-        width = state.get_width()
-        heigth = state.get_height()
         discount = math.pow(self._discount_factor, len(action_seq))
 
         expanded = []
         random.shuffle(actions)
         for action in actions:
-            new_state = state.deep_copy()
-            new_state.force_set_grid(self._forward_model.predict(new_state.get_grid(), action).reshape(width, heigth))
-            discounted_return = score + self._score_model.predict(prev_obs, new_state.get_grid()) * discount
-            discounted_return -= self.visited_states.get(new_state.get_identifier(), 0) * self._exploration_penalty * discount
+            new_state = deepcopy(state)
+            new_state, pred_score = self._forward_model.predict(new_state, action)
+            discounted_return = score + pred_score[0] * discount
+            discounted_return -= self.visited_states.get(new_state.string, 0) * self._exploration_penalty * discount
             expanded.append([action_seq + [action], round(discounted_return, 2), new_state])
 
         return expanded
 
     def get_agent_name(self) -> str:
         return "BFS Agent"
-
-
