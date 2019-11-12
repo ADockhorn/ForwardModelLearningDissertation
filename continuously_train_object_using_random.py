@@ -108,7 +108,8 @@ if __name__ == "__main__":
         # setup file paths for the results
         if not os.path.exists(f"results/{game_name}/"):
             os.mkdir(f"results/{game_name}/")
-        if os.path.exists(f"results/{game_name}/ob_continuous_results_lock_{AGENT_NAME}.txt"):
+        if os.path.exists(f"results/{game_name}/ob_continuous_results_lock_{AGENT_NAME}.txt") or \
+            os.path.exists(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt"):
             continue
         if os.path.exists(f"results/{game_name}/ob_forward_model_{AGENT_NAME}.txt"):
             continue
