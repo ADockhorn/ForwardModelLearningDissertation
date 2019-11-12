@@ -26,12 +26,12 @@ from typing import List
 
 
 def load_results(game_name: str):
-    with open(f"results/{game_name}/continuous_results_{AGENT_NAME}.txt", "rb") as f:
+    with open(f"results/{game_name}/lfm_continuous_results_{AGENT_NAME}.txt", "rb") as f:
         return pickle.load(f)
 
 
 def save_results(game_name, results):
-    with open(f"results/{game_name}/continuous_results_{AGENT_NAME}.txt", "wb") as f:
+    with open(f"results/{game_name}/lfm_continuous_results_{AGENT_NAME}.txt", "wb") as f:
         pickle.dump(results, f)
 
 
@@ -42,7 +42,7 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
     repetitions = 20
     n_levels = 5
 
-    if os.path.exists(f"results/{game_name}/continuous_results_{AGENT_NAME}.txt"):
+    if os.path.exists(f"results/{game_name}/lfm_continuous_results_{AGENT_NAME}.txt"):
         results = load_results(game_name)
         fm = results["forward_model"]
         sm = results["score_model"]
@@ -55,8 +55,8 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
     save_results(game_name, results)
 
     replays = dict()
-    if os.path.exists(f"results/{game_name}/videos_{AGENT_NAME}/replays.txt"):
-        with open(f"results/{game_name}/videos_{AGENT_NAME}/replays.txt", "rb") as f:
+    if os.path.exists(f"results/{game_name}/lfm_videos_{AGENT_NAME}/replays.txt"):
+        with open(f"results/{game_name}/lfm_videos_{AGENT_NAME}/replays.txt", "rb") as f:
             replays = pickle.load(f)
     else:
         replays = {level: {rep: [] for rep in range(repetitions)} for level in range(n_levels)}
@@ -115,7 +115,7 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
 
                 previous_observation = observation.get_grid()
 
-            with open(f"results/{game_name}/videos_{AGENT_NAME}/replays.txt", "wb") as f:
+            with open(f"results/{game_name}/lfm_videos_{AGENT_NAME}/replays.txt", "wb") as f:
                 pickle.dump(replays, f)
 
             results["ticks"][level, rep] = tick
@@ -124,7 +124,7 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
             sm.fit()
 
             anim = animation.ArtistAnimation(fig, ims, interval=100, blit=False, repeat=False)
-            anim.save(f'results/{game_name}/videos_{AGENT_NAME}/{rep*len(levels)+level}_DTRegressor_discounted_Continuous_{AGENT_NAME}.mp4')
+            anim.save(f'results/{game_name}/lfm_videos_{AGENT_NAME}/{rep*len(levels)+level}_DTRegressor_discounted_Continuous_{AGENT_NAME}.mp4')
             plt.close()
             game.close()
 
@@ -164,14 +164,14 @@ if __name__ == "__main__":
         # setup file paths for the results
         if not os.path.exists(f"results/{game_name}/"):
             os.mkdir(f"results/{game_name}/")
-        if not os.path.exists(f"results/{game_name}/videos_{AGENT_NAME}"):
-            os.mkdir(f"results/{game_name}/videos_{AGENT_NAME}")
-        if os.path.exists(f"results/{game_name}/continuous_results_lock_{AGENT_NAME}.txt"):
+        if not os.path.exists(f"results/{game_name}/lfm_videos_{AGENT_NAME}"):
+            os.mkdir(f"results/{game_name}/lfm_videos_{AGENT_NAME}")
+        if os.path.exists(f"results/{game_name}/lfm_continuous_results_lock_{AGENT_NAME}.txt"):
             continue
-        if os.path.exists(f"results/{game_name}/forward_model.txt"):
+        if os.path.exists(f"results/{game_name}/lfm_forward_model.txt"):
             continue
         else:
-            with open(f"results/{game_name}/continuous_results_lock_{AGENT_NAME}.txt", "wb") as f:
+            with open(f"results/{game_name}/lfm_continuous_results_lock_{AGENT_NAME}.txt", "wb") as f:
                 pickle.dump([0], f)
 
         print(f"processing {game_name}")
@@ -189,5 +189,5 @@ if __name__ == "__main__":
         continuously_train_model(agent, forward_model, game_name=game_name, levels=[0, 1, 2, 3, 4], version=0,
                                  sm=score_model)
 
-        if os.path.exists(f"results/{game_name}/continuous_results_lock_{AGENT_NAME}.txt"):
-            os.remove(f"results/{game_name}/continuous_results_lock_{AGENT_NAME}.txt")
+        if os.path.exists(f"results/{game_name}/lfm_continuous_results_lock_{AGENT_NAME}.txt"):
+            os.remove(f"results/{game_name}/lfm_continuous_results_lock_{AGENT_NAME}.txt")
