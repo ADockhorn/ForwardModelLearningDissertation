@@ -134,8 +134,8 @@ class ObjectBasedForwardModel:
 
         next_state = [[[] for j in range(height)] for i in range(width)]
 
-        living_objects = [0]*20
-        died_objects_per_type = [0]*20
+        living_objects = [0]*30
+        died_objects_per_type = [0]*30
 
         for object_id, [objectinfo, x_grid, y_grid] in objects.items():
             living_objects[objectinfo["itype"]] += 1
@@ -187,8 +187,8 @@ class ObjectBasedForwardModel:
         destroyed_objects = []
         updated_objects = []
 
-        living_objects = [0]*20
-        died_objects_per_type = [0]*20
+        living_objects = [0]*30
+        died_objects_per_type = [0]*30
 
         immovable_itypes = {element.itype for type in previous_observation.immovablePositions for element in type if element is not None}
         self.immovable_itypes = self.immovable_itypes.union(immovable_itypes)
