@@ -45,6 +45,7 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
     repetitions = 20
     n_levels = 5
 
+    results = dict()
     if os.path.exists(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt"):
         results = load_results(game_name)
         fm = results["forward_model"]
@@ -55,7 +56,6 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
                    "game_won": np.zeros((n_levels, repetitions))}
     save_results(game_name, results)
 
-    replays = dict()
     if os.path.exists(f"results/{game_name}/ob_videos_{AGENT_NAME}/replays.txt"):
         with open(f"results/{game_name}/ob_videos_{AGENT_NAME}/replays.txt", "rb") as f:
             replays = pickle.load(f)

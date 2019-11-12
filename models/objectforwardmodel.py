@@ -118,6 +118,7 @@ class ObjectBasedForwardModel:
             state = sso.state
             width = sso.width
             height = sso.height
+        death_penalty = 0
 
         objects = {element["obsID"]: [element, i, j] for i, row in enumerate(state) for j, cell in enumerate(row) for element in cell}
 
@@ -171,10 +172,12 @@ class ObjectBasedForwardModel:
                     pass
                     #print("out of bounce")
             else:
+                if objectinfo["itype"] in self.avatar_itypes:
+                    death_penalty = 10
                 died_objects_per_type[objectinfo["itype"]] += 1
                 #print("object died")
 
-        return ObjectGameState(next_state, width, height), self.predict_score(living_objects, died_objects_per_type)
+        return ObjectGameState(next_state, width, height), self.predict_score(living_objects, died_objects_per_type) - death_penalty
 
     def predict_score(self, living_objects, died_objects):
         return self.score_model.predict(np.array([living_objects + died_objects]))

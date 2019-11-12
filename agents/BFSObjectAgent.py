@@ -33,14 +33,13 @@ class BFSObjectAgent(AbstractForwardModelAgent):
                 to_expand.append(new_candidate)
                 candidates.append(new_candidate)
         """
-        """
+
         state = ObjectGameState(state.origObservationGrid, state.observationGrid.shape[2], state.observationGrid.shape[1])
         state_id = state.string
         if state_id in self.visited_states:
             self.visited_states[state_id] += 1
         else:
             self.visited_states[state_id] = 1
-        """
 
         unique_candidates = []
         to_expand = [[[], 0, state]]
@@ -76,7 +75,7 @@ class BFSObjectAgent(AbstractForwardModelAgent):
             new_state = deepcopy(state)
             new_state, pred_score = self._forward_model.predict(new_state, action)
             discounted_return = score + pred_score[0] * discount
-            #discounted_return -= self.visited_states.get(new_state.string, 0) * self._exploration_penalty * discount
+            discounted_return -= self.visited_states.get(new_state.string, 0) * self._exploration_penalty
             expanded.append([action_seq + [action], round(discounted_return, 2), new_state])
 
         return expanded
