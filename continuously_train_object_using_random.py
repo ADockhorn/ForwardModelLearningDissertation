@@ -41,87 +41,47 @@ def save_results(game_name, results):
 def continuously_train_model(agent, fm, game_name: str, levels: List[int], version: int):
     logging.debug("train forward model")
 
-    max_ticks = 2000
-    repetitions = 20
-    n_levels = 5
+    ticks_per_level = 2000
+    max_ticks_per_level = 100
 
     results = dict()
-    if os.path.exists(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt"):
-        results = load_results(game_name)
-        fm = results["forward_model"]
-        agent.set_forward_model(forward_model)
-    else:
-        results = {"scores": np.zeros((n_levels, repetitions)),
-                   "ticks": np.zeros((n_levels, repetitions)),
-                   "game_won": np.zeros((n_levels, repetitions))}
     save_results(game_name, results)
 
-    if os.path.exists(f"results/{game_name}/ob_videos_{AGENT_NAME}/replays.txt"):
-        with open(f"results/{game_name}/ob_videos_{AGENT_NAME}/replays.txt", "rb") as f:
-            replays = pickle.load(f)
-    else:
-        replays = {level: {rep: [] for rep in range(repetitions)} for level in range(n_levels)}
+    for level in tqdm(levels):
 
-    for rep in range(repetitions):
-        for level in levels:
-            if results["ticks"][level, rep] != 0:
-                continue
-
+        pbar = tqdm(total=ticks_per_level)
+        ticks = 0
+        while ticks < ticks_per_level:
             agent.re_initialize()
-            agent._discount_factor = 0.95
 
             game = GVGAIEnvironment(game_name, level, version)
 
             observation, total_score, _, sso = game.reset()
 
-            fig, axis = plt.subplots(1, 1)
-            plt.axis("off")
-            ims = []
-            replays[level][rep] = [observation.get_grid()]
-
             previous_observation = None
-            tick = 0
-            for tick in trange(max_ticks, desc=f"level {level}, rep {rep}, ticks", ncols=100):
-                ttl = axis.text(0.5, 1.01, f"{game_name} | total score = {total_score} | tick = {tick}",
-                                horizontalalignment='center',
-                                verticalalignment='bottom', transform=axis.transAxes)
-                ims.append([plt.imshow(sso.image), ttl])
-
-                if fm.is_trained():
-                    current_action = agent.get_next_action(sso, game.get_actions())
-                else:
-                    current_action = random.choice(game.get_actions())
+            for i in range(max_ticks_per_level):
+                ticks += 1
+                pbar.update(1)
+                current_action = random.choice(game.get_actions())
 
                 observation, score, is_over, sso = game.step(current_action)
-                replays[level][rep].append(observation.get_grid())
                 total_score += score
 
-                if previous_observation is not None and AGENT_NAME != "RANDOM":
+                if previous_observation:
                     fm.add_transitions(previous_observation, current_action, sso, score)
-                    if tick % 100 == 0:
-                        fm.fit()
 
                 if is_over:
                     break
 
                 previous_observation = sso
 
-            with open(f"results/{game_name}/ob_videos_{AGENT_NAME}/replays.txt", "wb") as f:
-                pickle.dump(replays, f)
-
-            results["ticks"][level, rep] = tick
-            results["scores"][level, rep] = total_score
-            fm.fit()
-
-            anim = animation.ArtistAnimation(fig, ims, interval=100, blit=False, repeat=False)
-            anim.save(f'results/{game_name}/ob_videos_{AGENT_NAME}/{rep*len(levels)+level}_DTRegressor_discounted_Continuous_{AGENT_NAME}.mp4')
-            plt.close()
             game.close()
-
-            agent.re_initialize()
-            results["agent"] = agent
             results["forward_model"] = fm
             save_results(game_name, results)
+        pbar.close()
+    fm.fit()
+    results["forward_model"] = fm
+    save_results(game_name, results)
 
 
 if __name__ == "__main__":
@@ -141,16 +101,13 @@ if __name__ == "__main__":
             continue
         evaluation_games.append(game)
 
-    for game_name in tqdm(evaluation_games, desc="games", ncols=100):
-        AGENT_NAME = "BFS"
-        agent = BFSObjectAgent(**BFS_AGENT_PARAMETERS)
-        agent._expansions = 100
+    for game_name in evaluation_games:
+        AGENT_NAME = "RANDOM"
+        agent = RandomAgent()
 
         # setup file paths for the results
         if not os.path.exists(f"results/{game_name}/"):
             os.mkdir(f"results/{game_name}/")
-        if not os.path.exists(f"results/{game_name}/ob_videos_{AGENT_NAME}"):
-            os.mkdir(f"results/{game_name}/ob_videos_{AGENT_NAME}")
         if os.path.exists(f"results/{game_name}/ob_continuous_results_lock_{AGENT_NAME}.txt"):
             continue
         if os.path.exists(f"results/{game_name}/ob_forward_model_{AGENT_NAME}.txt"):
