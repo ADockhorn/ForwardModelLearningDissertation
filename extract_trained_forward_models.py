@@ -24,8 +24,9 @@ if __name__ == "__main__":
         if not os.path.exists(f"results/{game}/models/"):
             os.mkdir(f"results/{game}/models/")
 
-        if os.path.exists(f"results/{game}/ob_continuous_results_RANDOM.txt") and not os.path.exists(f"results/{game}/ob_continuous_results_RANDOM.txt"):
+        if os.path.exists(f"results/{game}/ob_continuous_results_RANDOM.txt") and not os.path.exists(f"results/{game}/ob_continuous_results_lock_RANDOM.txt"):
             with open(f"results/{game}/ob_continuous_results_RANDOM.txt", "rb") as f:
+                print(game)
                 results = pickle.load(f)
                 fm = results["forward_model"]
                 fm.training_data = None
