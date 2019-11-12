@@ -43,7 +43,7 @@ class ObjectBasedForwardModel:
         self._is_trained = False
 
         self.score_model = LinearRegression()
-        self.score_training_data = np.empty((0, 41))
+        self.score_training_data = np.empty((0, 61))
 
     def is_trained(self):
         return self._is_trained
