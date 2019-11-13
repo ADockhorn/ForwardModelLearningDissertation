@@ -31,27 +31,31 @@ if __name__ == "__main__":
                 results = pickle.load(f)
 
                 training_results = dict()
-                training_results["scores"] = results["scores"]
-                training_results["ticks"] = results["ticks"]
-                training_results["game_won"] = results["game_won"]
-                if not os.path.exists(f"results/{game}/training_results/"):
-                    os.mkdir(f"results/{game}/training_results/")
-                with open(f"results/{game}/training_results/continuous_ob_training_results_RANDOM.txt", "wb") as file:
-                    pickle.dump(training_results, file)
-
-                if results["ticks"][-1, -1] != 0:
-                    if not os.path.exists(f"results/{game}/ob_continuous_results_lock_RANDOM.txt"):
-                        print(game, "is not done with training, but no lock exists")
+                if "scores" not in results:
+                    # print(results.keys())
                     continue
                 else:
-                    print(game, "extract continuous learning forward model")
+                    training_results["scores"] = results["scores"]
+                    training_results["ticks"] = results["ticks"]
+                    training_results["game_won"] = results["game_won"]
+                    if not os.path.exists(f"results/{game}/training_results/"):
+                        os.mkdir(f"results/{game}/training_results/")
+                    with open(f"results/{game}/training_results/continuous_ob_training_results_RANDOM.txt", "wb") as file:
+                        pickle.dump(training_results, file)
 
-                fm = results["forward_model"]
-                fm.training_data = None
-                fm.score_training_data = None
+                    if results["ticks"][-1, -1] != 0:
+                        if not os.path.exists(f"results/{game}/ob_continuous_results_lock_RANDOM.txt"):
+                            print(game, "is not done with training, but no lock exists")
+                        continue
+                    else:
+                        print(game, "extract continuous learning forward model")
 
-                with open(f"results/{game}/models/ob_forward_model_RANDOM.txt", "wb") as fmf:
-                    pickle.dump(fm, fmf)
+                    fm = results["forward_model"]
+                    fm.training_data = None
+                    fm.score_training_data = None
+
+                    with open(f"results/{game}/models/ob_forward_model_RANDOM.txt", "wb") as fmf:
+                        pickle.dump(fm, fmf)
         else:
             print(game, "random ob forward model is not done with training")
 
@@ -75,19 +79,22 @@ if __name__ == "__main__":
                 with open(f"results/{game}/training_results/continuous_ob_training_results_BFS.txt", "wb") as file:
                     pickle.dump(training_results, file)
 
-                if results["ticks"][-1, -1] != 0:
+                if results["ticks"][-1, -1] == 0:
                     if not os.path.exists(f"results/{game}/ob_continuous_results_lock_BFS.txt"):
-                        print(game, "is not done with training, but no lock exists")
+                        print("!!!", game, "is not done with training, but no lock exists")
                     continue
                 else:
                     print(game, "extract continuous learning object based forward model")
+               
+                if "forward_model" in results: 
+                    fm = results["forward_model"]
+                    fm.training_data = None
+                    fm.score_training_data = None
 
-                fm = results["forward_model"]
-                fm.training_data = None
-                fm.score_training_data = None
-
-                with open(f"results/{game}/models/ob_forward_model_BFS.txt", "wb") as fmf:
-                    pickle.dump(fm, fmf)
+                    with open(f"results/{game}/models/ob_forward_model_BFS.txt", "wb") as fmf:
+                        pickle.dump(fm, fmf)
+                else:
+                    print("!!!", game, "no forward model", results.keys())
 
         else:
             print(game, "bfs ob forward model has not been trained yet")
