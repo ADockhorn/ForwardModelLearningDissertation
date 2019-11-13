@@ -1,3 +1,0 @@
-if game == 'painter': 
-	return {'a': ['sprites/oryx/backGrey.png', 'sprites/newset/floor5.png'], 'b': ['sprites/oryx/backGrey.png', 'sprites/newset/paint2.png'], 'c': ['sprites/oryx/backGrey.png', 'sprites/newset/painter21.png', 'sprites/newset/paint2.png'], 'd': ['sprites/oryx/backGrey.png', 'sprites/oryx/backGrey.png'], 'e': ['sprites/oryx/backGrey.png', 'sprites/newset/paint2.png'], 'f': ['sprites/oryx/backGrey.png', 'sprites/oryx/backGrey.png'], 'g': ['sprites/oryx/backGrey.png', 'sprites/newset/painter21.png', 'sprites/newset/floor5.png'], 'h': ['sprites/oryx/backGrey.png', 'sprites/oryx/backGrey.png', 'sprites/newset/painter21.png']}
-

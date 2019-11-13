@@ -73,18 +73,21 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
 
             observation, total_score, _, sso = game.reset()
 
-            fig, axis = plt.subplots(1, 1)
-            plt.axis("off")
-            ims = []
-            replays[level][rep] = [observation.get_grid()]
+            if rep % 5 == 0 or rep == 19:
+                fig, axis = plt.subplots(1, 1)
+                plt.axis("off")
+                ims = []
+                replays[level][rep] = [observation.get_grid()]
 
             previous_observation = None
             tick = 0
+            retrain = False
             for tick in trange(max_ticks, desc=f"level {level}, rep {rep}, ticks", ncols=100):
-                ttl = axis.text(0.5, 1.01, f"{game_name} | total score = {total_score} | tick = {tick}",
-                                horizontalalignment='center',
-                                verticalalignment='bottom', transform=axis.transAxes)
-                ims.append([plt.imshow(sso.image), ttl])
+                if rep % 5 == 0 or rep == 19:
+                    ttl = axis.text(0.5, 1.01, f"{game_name} | total score = {total_score} | tick = {tick}",
+                                    horizontalalignment='center',
+                                    verticalalignment='bottom', transform=axis.transAxes)
+                    ims.append([plt.imshow(sso.image), ttl])
 
                 if fm.is_trained():
                     current_action = agent.get_next_action(observation, game.get_actions())
@@ -92,13 +95,15 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
                     current_action = random.choice(game.get_actions())
 
                 observation, score, is_over, sso = game.step(current_action)
-                replays[level][rep].append(observation.get_grid())
+                if rep % 5 == 0 or rep == 19:
+                    replays[level][rep].append(observation.get_grid())
                 total_score += score
 
                 if previous_observation is not None and AGENT_NAME != "RANDOM":
                     fm.add_transition(previous_observation, current_action, observation.get_grid())
+                    retrain = retrain or np.any(observation.get_grid().flatten() != fm.predict(previous_observation, current_action))
                     if tick % 100 == 0:
-                        if not fm.is_trained() or np.any(observation.get_grid().flatten() != fm.predict(previous_observation, current_action)):
+                        if not fm.is_trained() or retrain:
                             fm.fit()
 
                     if is_over and game.info["sso"].gameWinner == "PLAYER_WINS":
@@ -115,17 +120,20 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
 
                 previous_observation = observation.get_grid()
 
-            with open(f"results/{game_name}/lfm_videos_{AGENT_NAME}/replays.txt", "wb") as f:
-                pickle.dump(replays, f)
+            if rep % 5 == 0 or rep == 19:
+                with open(f"results/{game_name}/lfm_videos_{AGENT_NAME}/replays.txt", "wb") as f:
+                    pickle.dump(replays, f)
 
             results["ticks"][level, rep] = tick
             results["scores"][level, rep] = total_score
             fm.fit()
             sm.fit()
 
-            anim = animation.ArtistAnimation(fig, ims, interval=100, blit=False, repeat=False)
-            anim.save(f'results/{game_name}/lfm_videos_{AGENT_NAME}/{rep*len(levels)+level}_DTRegressor_discounted_Continuous_{AGENT_NAME}.mp4')
-            plt.close()
+            if rep % 5 == 0 or rep == 19:
+                anim = animation.ArtistAnimation(fig, ims, interval=100, blit=False, repeat=False)
+                anim.save(f'results/{game_name}/lfm_videos_{AGENT_NAME}/{rep*len(levels)+level}_DTRegressor_discounted_Continuous_{AGENT_NAME}.mp4')
+                plt.close()
+
             game.close()
 
             agent.re_initialize()
@@ -153,13 +161,10 @@ if __name__ == "__main__":
             continue
         evaluation_games.append(game)
 
-   # evaluation_games = ["decepticoins"] # ["bait", "decepticoins", "painter"]
     for game_name in tqdm(evaluation_games, desc="games", ncols=100):
         AGENT_NAME = "BFS"
         agent = BFSAgent(**BFS_AGENT_PARAMETERS)
         agent._expansions = 100
-        #agent = RandomAgent()
-        #agent = RHEAAgent(**RHEA_AGENT_PARAMETERS)
 
         # setup file paths for the results
         if not os.path.exists(f"results/{game_name}/"):

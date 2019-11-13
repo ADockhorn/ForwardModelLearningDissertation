@@ -74,18 +74,20 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
 
             observation, total_score, _, sso = game.reset()
 
-            fig, axis = plt.subplots(1, 1)
-            plt.axis("off")
-            ims = []
-            replays[level][rep] = [observation.get_grid()]
+            if rep % 5 == 0 or rep == 19:
+                fig, axis = plt.subplots(1, 1)
+                plt.axis("off")
+                ims = []
+                replays[level][rep] = [observation.get_grid()]
 
             previous_observation = None
             tick = 0
             for tick in trange(max_ticks, desc=f"level {level}, rep {rep}, ticks", ncols=100):
-                ttl = axis.text(0.5, 1.01, f"{game_name} | total score = {total_score} | tick = {tick}",
-                                horizontalalignment='center',
-                                verticalalignment='bottom', transform=axis.transAxes)
-                ims.append([plt.imshow(sso.image), ttl])
+                if rep % 5 == 0 or rep == 19:
+                    ttl = axis.text(0.5, 1.01, f"{game_name} | total score = {total_score} | tick = {tick}",
+                                    horizontalalignment='center',
+                                    verticalalignment='bottom', transform=axis.transAxes)
+                    ims.append([plt.imshow(sso.image), ttl])
 
                 if fm.is_trained():
                     current_action = agent.get_next_action(sso, game.get_actions())
@@ -106,16 +108,19 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
 
                 previous_observation = sso
 
-            with open(f"results/{game_name}/ob_videos_{AGENT_NAME}/replays.txt", "wb") as f:
-                pickle.dump(replays, f)
+            if rep % 5 == 0 or rep == 19:
+                with open(f"results/{game_name}/ob_videos_{AGENT_NAME}/replays.txt", "wb") as f:
+                    pickle.dump(replays, f)
 
             results["ticks"][level, rep] = tick
             results["scores"][level, rep] = total_score
             fm.fit()
 
-            anim = animation.ArtistAnimation(fig, ims, interval=100, blit=False, repeat=False)
-            anim.save(f'results/{game_name}/ob_videos_{AGENT_NAME}/{rep*len(levels)+level}_DTRegressor_discounted_Continuous_{AGENT_NAME}.mp4')
-            plt.close()
+            if rep % 5 == 0 or rep == 19:
+                anim = animation.ArtistAnimation(fig, ims, interval=100, blit=False, repeat=False)
+                anim.save(f'results/{game_name}/ob_videos_{AGENT_NAME}/{rep*len(levels)+level}_DTRegressor_discounted_Continuous_{AGENT_NAME}.mp4')
+                plt.close()
+
             game.close()
 
             agent.re_initialize()
