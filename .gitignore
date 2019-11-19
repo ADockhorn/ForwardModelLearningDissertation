@@ -61,6 +61,8 @@ target/
 *replays*.txt
 *.mp4
 *continuous_results*.txt
+*transfer_learning_model_extraction*.txt
+*transfer_learning_model_evaluation_lock.txt
 
 results/bait/lock.txt
 
