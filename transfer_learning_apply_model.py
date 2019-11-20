@@ -173,12 +173,10 @@ if __name__ == "__main__":
 
         lfm, sm, obfm = load_models(game_name)
 
-        """
         for agent, agent_name in zip([BFSAgent(**BFS_AGENT_PARAMETERS)], ["BFS"]):
             agent.set_forward_model(lfm)
             agent.set_score_model(sm)
             evaluate_lfm(agent, game_name, agent_name)
-        """
 
         for agent, agent_name in zip([BFSObjectAgent(**BFS_AGENT_PARAMETERS)], ["BFS"]):
             agent.set_forward_model(obfm)

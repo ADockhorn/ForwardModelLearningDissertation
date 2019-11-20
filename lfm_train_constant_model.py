@@ -29,27 +29,26 @@ from models.objectforwardmodel import ObjectBasedForwardModel
 
 
 def load_results(game_name: str):
-    with open(f"results/{game_name}/transfer_learning_model_extraction.txt", "rb") as f:
+    with open(f"results/{game_name}/lfm_learning_model_extraction.txt", "rb") as f:
         return pickle.load(f)
 
 
 def save_results(game_name, results):
-    with open(f"results/{game_name}/transfer_learning_model_extraction.txt", "wb") as f:
+    with open(f"results/{game_name}/lfm_learning_model_extraction.txt", "wb") as f:
         pickle.dump(results, f)
 
 
-def train_transfer_learning_models(lfm, sm, obfm, game_name):
-    ticks_per_level = 5000
+def train_transfer_learning_models(lfm, sm, game_name):
+    ticks_per_level = 2000
     max_ticks_per_level = 300
-    levels = [0, 1, 2]
+    levels = [0, 1, 2, 3, 4]
 
-    if os.path.exists(f"results/{game_name}/transfer_learning_model_extraction.txt"):
-        with open(f"results/{game_name}/transfer_learning_model_extraction.txt", "rb") as f:
+    if os.path.exists(f"results/{game_name}/lfm_learning_model_extraction.txt"):
+        with open(f"results/{game_name}/lfm_learning_model_extraction.txt", "rb") as f:
             results = pickle.load(f)
         if "local_forward_model" in results:
             lfm = results["local_forward_model"]
             sm = results["score_model"]
-            obfm = results["object_based_model"]
     else:
         results = {"ticks_per_level": [0]*len(levels),
                    "repetitions_per_level": [0]*len(levels)}
@@ -67,7 +66,6 @@ def train_transfer_learning_models(lfm, sm, obfm, game_name):
             observation, total_score, is_over, sso = game.reset()
 
             previous_observation_lfm = None
-            previous_observation_ob = None
             ticks_since_restart = 0
 
             for i in range(max_ticks_per_level):
@@ -82,17 +80,15 @@ def train_transfer_learning_models(lfm, sm, obfm, game_name):
 
                 if previous_observation_lfm is not None:
                     lfm.add_transition(previous_observation_lfm, current_action, observation.get_grid())
-                    obfm.add_transitions(previous_observation_ob, current_action, sso, score)
 
                     if is_over and game.info["sso"].gameWinner == "PLAYER_WINS":
                         sm.add_transition(previous_observation_lfm, observation.get_grid(), score + 1000)
                     else:
                         sm.add_transition(previous_observation_lfm, observation.get_grid(), score)
 
-                if is_over or ticks == ticks_per_level:
+                if is_over or ticks == ticks_per_level or ticks_since_restart == 500:
                     break
 
-                previous_observation_ob = sso
                 previous_observation_lfm = observation.get_grid()
 
             game.close()
@@ -100,8 +96,6 @@ def train_transfer_learning_models(lfm, sm, obfm, game_name):
             results["repetitions_per_level"][level] += 1
             results["local_forward_model"] = lfm
             results["score_model"] = sm
-            results["object_based_model"] = obfm
-            #save_results(game_name, results)
         pbar.close()
 
     save_results(game_name, results)
@@ -109,20 +103,14 @@ def train_transfer_learning_models(lfm, sm, obfm, game_name):
     print("fit models")
 
     lfm.fit()
-    obfm.fit()
     sm.fit()
 
     lfm._data_set = None
     sm._data_set = None
-    obfm.score_training_data = None
-    obfm.training_data = None
 
     print("store models")
-    with open(f"results/{game_name}/models/transfer_learning_model_lfm.txt", "wb") as f:
+    with open(f"results/{game_name}/models/lfm_forward_model_RANDOM.txt", "wb") as f:
         pickle.dump({"forward_model": lfm, "score_model": sm}, f)
-
-    with open(f"results/{game_name}/models/transfer_learning_model_obfm.txt", "wb") as f:
-        pickle.dump({"forward_model": obfm}, f)
 
 
 if __name__ == "__main__":
@@ -144,12 +132,11 @@ if __name__ == "__main__":
 
         if not os.path.exists(f"results/{game_name}/"):
             os.mkdir(f"results/{game_name}/")
-        if os.path.exists(f"results/{game_name}/transfer_learning_model_extraction_lock.txt") or \
-            os.path.exists(f"results/{game_name}/models/transfer_learning_model_lfm.txt") or \
-            os.path.exists(f"results/{game_name}/models/transfer_learning_model_obfm.txt"):
+        if os.path.exists(f"results/{game_name}/lfm_learning_model_extraction_lock.txt") or \
+                os.path.exists(f"results/{game_name}/models/lfm_forward_model_RANDOM.txt"):
             continue
         else:
-            with open(f"results/{game_name}/transfer_learning_model_extraction_lock.txt", "wb") as f:
+            with open(f"results/{game_name}/lfm_learning_model_extraction_lock.txt", "wb") as f:
                 pickle.dump([0], f)
 
         print(f"processing {game_name}")
@@ -160,11 +147,10 @@ if __name__ == "__main__":
                                               np.array(["0", "1", "2", "3", "4", "5", "x"])))
         sm = GlobalScoreModel(possible_observations=np.append(np.array(list(get_object_dict(game_name).values())),
                                                               np.array(["0", "1", "2", "3", "4", "5", "x"])))
-        obfm = ObjectBasedForwardModel(DecisionTreeClassifier, [])
 
-        train_transfer_learning_models(lfm, sm, obfm, game_name)
+        train_transfer_learning_models(lfm, sm, game_name)
 
-        if os.path.exists(f"results/{game_name}/transfer_learning_model_extraction_lock.txt"):
-            os.remove(f"results/{game_name}/transfer_learning_model_extraction_lock.txt")
+        if os.path.exists(f"results/{game_name}/lfm_learning_model_extraction_lock.txt"):
+            os.remove(f"results/{game_name}/lfm_learning_model_extraction_lock.txt")
 
         break
