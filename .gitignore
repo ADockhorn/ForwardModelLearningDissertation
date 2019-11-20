@@ -65,6 +65,7 @@ target/
 *transfer_learning_model_evaluation_lock.txt
 *lfm_learning_model_extraction*.txt
 *lfm_learning_model_evaluation_lock.txt
+*lfm_learning_model_evaluation_lock*.txt
 
 results/bait/lock.txt
 
