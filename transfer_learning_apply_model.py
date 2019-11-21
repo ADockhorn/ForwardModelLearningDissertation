@@ -185,5 +185,3 @@ if __name__ == "__main__":
 
         if os.path.exists(f"results/{game_name}/transfer_learning_model_evaluation_lock.txt"):
             os.remove(f"results/{game_name}/transfer_learning_model_evaluation_lock.txt")
-
-        break

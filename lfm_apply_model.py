@@ -144,4 +144,3 @@ if __name__ == "__main__":
             if os.path.exists(f"results/{game_name}/lfm_learning_model_evaluation_lock_RHEA.txt"):
                 os.remove(f"results/{game_name}/lfm_learning_model_evaluation_lock_RHEA.txt")
 
-        break
