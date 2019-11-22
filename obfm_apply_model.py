@@ -147,9 +147,6 @@ if __name__ == "__main__":
 
 
     for game_name in evaluation_games:
-        game_name = "decepticoins"
-
-        """
         if not os.path.exists(f"results/{game_name}/models/ob_forward_model_RANDOM.txt"):
             continue
         if not os.path.exists(f"results/{game_name}/obfm_model_evaluation_lock_BFS.txt"):
@@ -167,7 +164,6 @@ if __name__ == "__main__":
 
             if os.path.exists(f"results/{game_name}/obfm_model_evaluation_lock_BFS.txt"):
                 os.remove(f"results/{game_name}/obfm_model_evaluation_lock_BFS.txt")
-        """
 
         if not os.path.exists(f"results/{game_name}/obfm_model_evaluation_lock_RHEA.txt"):
             with open(f"results/{game_name}/obfm_model_evaluation_lock_RHEA.txt", "wb") as f:

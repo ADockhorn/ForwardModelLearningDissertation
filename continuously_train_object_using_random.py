@@ -29,9 +29,11 @@ from models.objectforwardmodel import ObjectBasedForwardModel
 
 
 def load_results(game_name: str):
-    with open(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt", "rb") as f:
-        return pickle.load(f)
-
+    if os.path.exists(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt"):
+        with open(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt", "rb") as f:
+            return pickle.load(f)
+    else:
+        return dict()
 
 def save_results(game_name, results):
     with open(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt", "wb") as f:
@@ -42,9 +44,11 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
     logging.debug("train forward model")
 
     ticks_per_level = 2000
-    max_ticks_per_level = 100
+    max_ticks_per_level = 300
 
-    results = dict()
+    results = load_results(game_name)
+    if "forward_model" in results:
+        fm = results["forward_model"]
     save_results(game_name, results)
 
     for level in tqdm(levels):
