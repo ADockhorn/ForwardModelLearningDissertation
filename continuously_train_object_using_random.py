@@ -28,13 +28,6 @@ from typing import List
 from models.objectforwardmodel import ObjectBasedForwardModel
 
 
-def load_results(game_name: str):
-    if os.path.exists(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt"):
-        with open(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt", "rb") as f:
-            return pickle.load(f)
-    else:
-        return dict()
-
 def save_results(game_name, results):
     with open(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt", "wb") as f:
         pickle.dump(results, f)
@@ -46,15 +39,23 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
     ticks_per_level = 2000
     max_ticks_per_level = 300
 
-    results = load_results(game_name)
-    if "forward_model" in results:
-        fm = results["forward_model"]
+    if os.path.exists(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt"):
+        with open(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt", "rb") as f:
+            results = pickle.load(f)
+        if "forward_model" in results:
+            fm = results["forward_model"]
+    else:
+        results = {"ticks_per_level": [0] * len(levels),
+                   "repetitions_per_level": [0] * len(levels)}
+
     save_results(game_name, results)
 
     for level in tqdm(levels):
 
-        pbar = tqdm(total=ticks_per_level)
-        ticks = 0
+        pbar = tqdm(total=ticks_per_level, desc=f"{game_name}, level {level}, ticks",  ncols=200)
+        pbar.update(results["ticks_per_level"][level])
+        ticks = results["ticks_per_level"][level]
+
         while ticks < ticks_per_level:
             agent.re_initialize()
 
@@ -63,8 +64,10 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
             observation, total_score, _, sso = game.reset()
 
             previous_observation = None
+
             for i in range(max_ticks_per_level):
                 ticks += 1
+
                 pbar.update(1)
                 current_action = random.choice(game.get_actions())
 
@@ -74,18 +77,26 @@ def continuously_train_model(agent, fm, game_name: str, levels: List[int], versi
                 if previous_observation:
                     fm.add_transitions(previous_observation, current_action, sso, score)
 
-                if is_over:
+                if is_over or ticks == ticks_per_level:
                     break
 
                 previous_observation = sso
 
             game.close()
             results["forward_model"] = fm
+            results["ticks_per_level"][level] = ticks
+            results["repetitions_per_level"][level] += 1
             save_results(game_name, results)
         pbar.close()
     fm.fit()
     results["forward_model"] = fm
     save_results(game_name, results)
+
+    fm.training_data = None
+    print("store models")
+    with open(f"results/{game_name}/models/ob_forward_model_RANDOM.txt", "wb") as f:
+        pickle.dump(fm, f)
+
 
 
 if __name__ == "__main__":
@@ -112,10 +123,11 @@ if __name__ == "__main__":
         # setup file paths for the results
         if not os.path.exists(f"results/{game_name}/"):
             os.mkdir(f"results/{game_name}/")
-        if os.path.exists(f"results/{game_name}/ob_continuous_results_lock_{AGENT_NAME}.txt") or \
-            os.path.exists(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt"):
-            continue
-        if os.path.exists(f"results/{game_name}/ob_forward_model_{AGENT_NAME}.txt"):
+        #if os.path.exists(f"results/{game_name}/ob_continuous_results_lock_{AGENT_NAME}.txt") or \
+        #    os.path.exists(f"results/{game_name}/ob_continuous_results_{AGENT_NAME}.txt"):
+        #    continue
+        if os.path.exists(f"results/{game_name}/models/ob_forward_model_{AGENT_NAME}.txt"):
+            print("skip ", game_name)
             continue
         else:
             with open(f"results/{game_name}/ob_continuous_results_lock_{AGENT_NAME}.txt", "wb") as f:
