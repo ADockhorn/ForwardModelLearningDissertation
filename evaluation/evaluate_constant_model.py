@@ -106,7 +106,6 @@ if __name__ == "__main__":
                 game_results[i, index[res[x][0]]] = j
     print(ranks)
     print(points)
-    print(game_results)
 
     import matplotlib.pyplot as plt
 

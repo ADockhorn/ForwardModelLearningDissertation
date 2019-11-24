@@ -13,6 +13,7 @@ from games.GVGAIConstants import get_images, get_object_dict
 from games.gvgai_environment import GVGAIEnvironment
 from agents.RHEA import RHEAAgent
 from agents.BFSAgent import BFSAgent
+from agents.MCTS import MCTSAgent
 from agents.RandomAgent import RandomAgent
 from matplotlib import animation
 from gym import envs
@@ -143,4 +144,20 @@ if __name__ == "__main__":
 
             if os.path.exists(f"results/{game_name}/lfm_learning_model_evaluation_lock_RHEA.txt"):
                 os.remove(f"results/{game_name}/lfm_learning_model_evaluation_lock_RHEA.txt")
+
+        if not os.path.exists(f"results/{game_name}/lfm_learning_model_evaluation_lock_MCTS.txt"):
+            with open(f"results/{game_name}/lfm_learning_model_evaluation_lock_MCTS.txt", "wb") as f:
+                pickle.dump([0], f)
+
+            print(f"processing {game_name}, MCTS")
+
+            lfm, sm = load_models(game_name)
+
+            for agent, agent_name in zip([MCTSAgent()], ["MCTS"]):
+                agent.set_forward_model(lfm)
+                agent.set_score_model(sm)
+                evaluate_lfm(agent, game_name, agent_name)
+
+            if os.path.exists(f"results/{game_name}/lfm_learning_model_evaluation_lock_MCTS.txt"):
+                os.remove(f"results/{game_name}/lfm_learning_model_evaluation_lock_MCTS.txt")
 
