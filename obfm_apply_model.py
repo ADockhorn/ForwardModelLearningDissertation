@@ -24,6 +24,7 @@ import logging
 from tqdm import tqdm, trange
 import random
 from typing import List
+from agents.MCTSObject import MCTSObjectAgent
 
 
 def load_models(game_name):
@@ -147,8 +148,10 @@ if __name__ == "__main__":
 
 
     for game_name in evaluation_games:
+
         if not os.path.exists(f"results/{game_name}/models/ob_forward_model_RANDOM.txt"):
             continue
+
         if not os.path.exists(f"results/{game_name}/obfm_model_evaluation_lock_BFS.txt"):
             with open(f"results/{game_name}/obfm_model_evaluation_lock_BFS.txt", "wb") as f:
                 pickle.dump([0], f)
@@ -181,5 +184,18 @@ if __name__ == "__main__":
             if os.path.exists(f"results/{game_name}/obfm_model_evaluation_lock_RHEA.txt"):
                 os.remove(f"results/{game_name}/obfm_model_evaluation_lock_RHEA.txt")
 
+        if not os.path.exists(f"results/{game_name}/obfm_model_evaluation_lock_MCTS.txt"):
+            with open(f"results/{game_name}/obfm_model_evaluation_lock_MCTS.txt", "wb") as f:
+                pickle.dump([0], f)
 
+            print(f"processing {game_name}, MCTS")
 
+            obfm = load_models(game_name)
+
+            for agent, agent_name in zip([MCTSObjectAgent()], ["MCTS"]):
+                agent.set_forward_model(obfm)
+                agent.set_score_model(obfm)
+                evaluate_obfm(agent, game_name, agent_name)
+
+            if os.path.exists(f"results/{game_name}/obfm_model_evaluation_lock_MCTS.txt"):
+                os.remove(f"results/{game_name}/obfm_model_evaluation_lock_MCTS.txt")

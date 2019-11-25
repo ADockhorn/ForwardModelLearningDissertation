@@ -28,10 +28,11 @@ if __name__ == "__main__":
             continue
         evaluation_games.append(game)
 
-    ranks = [[0]*5, [0]*5, [0]*5, [0]*5, [0]*5]
-    points = [0]*5
-    index = {"Random": 0, "LFM_BFS": 1, "LFM_RHEA": 2, "OBFM_BFS": 3, "OBFM_RHEA": 4}
-    game_results = np.zeros((30, 5))
+    ranks = [[0]*6, [0]*6, [0]*6, [0]*6, [0]*6, [0]*6]
+    points = [0]*6
+    index = {"Random": 0, "LFM_BFS": 1, "LFM_RHEA": 2, "LFM_MCTS": 3, "OBFM_BFS": 4, "OBFM_RHEA": 5}
+    game_results = np.zeros((30, 6))
+    formula = {0: 25, 1: 18, 2: 15, 3: 12, 4: 10, 5: 8, 6: 6, 7: 4, 8: 2, 10: 1}
 
     for i, game in enumerate(evaluation_games):
 
@@ -65,8 +66,16 @@ if __name__ == "__main__":
                     results_rhea = pickle.load(f)
                 valid = results_rhea["LFM_RHEA"]["ticks"] > 0
                 results["LFM_RHEA"] = (np.mean(results_rhea["LFM_RHEA"]["game_won"][valid]),
-                                      np.mean(results_rhea["LFM_RHEA"]["scores"][valid]),
-                                      np.mean(results_rhea["LFM_RHEA"]["ticks"][valid]))
+                                       np.mean(results_rhea["LFM_RHEA"]["scores"][valid]),
+                                       np.mean(results_rhea["LFM_RHEA"]["ticks"][valid]))
+
+            if os.path.exists(f"results/{game}/training_results/constant_lfm_MCTS.txt"):
+                with open(f"results/{game}/training_results/constant_lfm_MCTS.txt", "rb") as f:
+                    results_mcts = pickle.load(f)
+                valid = results_mcts["LFM_MCTS"]["ticks"] > 0
+                results["LFM_MCTS"] = (np.mean(results_mcts["LFM_MCTS"]["game_won"][valid]),
+                                       np.mean(results_mcts["LFM_MCTS"]["scores"][valid]),
+                                       np.mean(results_mcts["LFM_MCTS"]["ticks"][valid]))
 
             if os.path.exists(f"results/{game}/training_results/constant_obfm_BFS.txt"):
                 with open(f"results/{game}/training_results/constant_obfm_BFS.txt", "rb") as f:
@@ -90,20 +99,34 @@ if __name__ == "__main__":
 
             print()
             print()"""
+            if game == "tercio":
+                print("test")
 
             res = [[x] + [round(y, 2) for y in results[x]] for x in results]
             o = sorted(range(len(res)), key=lambda k: (res[k][1], res[k][2], res[k][3]), reverse=True)
+            rank = [0]*6
+            current_rank = 0
+            skip = 1
+            for io in range(len(o)-1):
+                rank[o[io]] = current_rank
+                if res[o[io]][1:4] != res[o[io+1]][1:4]:
+                    current_rank += skip
+                    skip = 1
+                else:
+                    skip += 1
+            rank[o[-1]] = current_rank
+
             print(game, [res[x][0] for x in o])
 
-            for p, x in zip([25, 18, 15, 12, 10], o):
+            for io, x in enumerate(o):
             ##for p, x in zip([5, 4, 3, 2, 1], o):
                 #print(points, res[x][0])
-                points[index[res[x][0]]] += p
+                points[index[res[x][0]]] += formula[rank[o[io]]]
 
             for j, x in enumerate(o):
                 #print(i, x)
-                ranks[index[res[x][0]]][j] += 1
-                game_results[i, index[res[x][0]]] = j
+                ranks[index[res[x][0]]][rank[o[j]]] += 1
+                game_results[i, index[res[x][0]]] = rank[o[j]]
     print(ranks)
     print(points)
 
@@ -119,24 +142,24 @@ if __name__ == "__main__":
 
     grid = dict(height_ratios=[5], width_ratios=[15])
     fig, ax = plt.subplots(ncols=1, nrows=1, gridspec_kw = grid)
-    fig.set_figheight(4)
+    fig.set_figheight(5)
     fig.set_figwidth(10)
-    im, cbar = heatmap(game_results[0:15, :].transpose()+1, ["Random", "LFM-BFS", "LFM-RHEA", "OBFM-BFS", "OBFM-RHEA"],
-                       evaluation_games[:15], ax=ax, vmin=1, vmax=5, cbar=False, cmap=plt.cm.get_cmap('viridis_r', 5),
-                       cbar_kw={"ticks": [1, 2, 3, 4, 5]})
-    annotate_heatmap(im, game_results[:15, :].transpose()+1, valfmt="{x:1.0f}", threshold=3, threshold2=10)
+    im, cbar = heatmap(game_results[0:15, :].transpose()+1, ["Random", "LFM-BFS", "LFM-RHEA", "LFM-MCTS", "OBFM-BFS", "OBFM-RHEA"],
+                       evaluation_games[:15], ax=ax, vmin=1, vmax=6, cbar=False, cmap=plt.cm.get_cmap('viridis_r', 6),
+                       cbar_kw={"ticks": [1, 2, 3, 4, 5, 6]})
+    annotate_heatmap(im, game_results[:15, :].transpose()+1, valfmt="{x:1.0f}", threshold=4, threshold2=10)
     plt.savefig("figures/game-playing/agent-ranks-games-1-15.pdf")
     plt.savefig("figures/game-playing/agent-ranks-games-1-15.png")
     plt.show()
 
     grid = dict(height_ratios=[5], width_ratios=[15])
     fig, ax = plt.subplots(ncols=1, nrows=1, gridspec_kw = grid)
-    fig.set_figheight(4)
+    fig.set_figheight(5)
     fig.set_figwidth(10)
-    im, cbar = heatmap(game_results[15:, :].transpose()+1, ["Random", "LFM-BFS", "LFM-RHEA", "OBFM-BFS", "OBFM-RHEA"],
-                       evaluation_games[15:], ax=ax, vmin=1, vmax=5, cbar=False, cmap=plt.cm.get_cmap('viridis_r', 5),
-                       cbar_kw={"ticks": [1, 2, 3, 4, 5]})
-    annotate_heatmap(im, game_results[15:, :].transpose()+1, valfmt="{x:1.0f}", threshold=3, threshold2=10)
+    im, cbar = heatmap(game_results[15:, :].transpose()+1, ["Random", "LFM-BFS", "LFM-RHEA", "LFM-MCTS", "OBFM-BFS", "OBFM-RHEA"],
+                       evaluation_games[15:], ax=ax, vmin=1, vmax=6, cbar=False, cmap=plt.cm.get_cmap('viridis_r', 6),
+                       cbar_kw={"ticks": [1, 2, 3, 4, 5, 6]})
+    annotate_heatmap(im, game_results[15:, :].transpose()+1, valfmt="{x:1.0f}", threshold=4, threshold2=10)
     plt.savefig("figures/game-playing/agent-ranks-games-16-30.pdf")
     plt.savefig("figures/game-playing/agent-ranks-games-16-30.png")
     plt.show()
