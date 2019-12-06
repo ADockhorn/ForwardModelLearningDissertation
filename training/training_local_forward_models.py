@@ -97,7 +97,7 @@ def record_data(game_name):
 
 
 if __name__ == "__main__":
-    #os.chdir("/".join(os.getcwd().split("/")[:-1]))
+    os.chdir("/".join(os.getcwd().split("/")[:-1]))
 
     classifiers_names = ["Nearest Neighbors", 
                          #"Linear SVM", "RBF SVM",
@@ -129,58 +129,56 @@ if __name__ == "__main__":
             if len(s) > 1:
                 grid_based_games.append(s[:-1])
 
-    # filter games that have too complex state representations and games that do not provide 5 levels
-    evaluation_games = []
-    for game in grid_based_games:
-        n_levels = len([env_spec.id for env_spec in envs.registry.all() if env_spec.id.startswith(f"gvgai-{game}-")])
-        if len(get_images(game)) > 25 or n_levels < 3:
-            logging.info(f"game {game} was excluded")
-            continue
-        evaluation_games.append(game)
-
-    for game_name in evaluation_games:
+    for game_name in grid_based_games:
         results = {}
 
         data_sets = record_data(game_name)
-        if data_sets is None or os.path.exists(f"results/{game_name}/grid_search.txt"):
+        if data_sets is None:
             continue
+        if os.path.exists(f"results/{game_name}/grid_search.txt"):
+            with open(f"results/{game_name}/grid_search.txt", "rb") as f:
+                results = pickle.load(f)
 
         with open(f"results/{game_name}/lock.txt", "wb") as f:
             pickle.dump([0], f)
 
         print(game_name)
         for cla_name, cla, parameter_grid in tqdm(zip(classifiers_names, classifiers, parameters), ncols=100):
-            results[cla_name] = {"grid_search": [], "best_parameters": None, "best_mean_accuracy": 0,
-                                 "best_cv_values": None, "best_data_set": None}
+            if cla_name not in results:
+                results[cla_name] = {"grid_search": [], "best_parameters": None, "best_mean_accuracy": 0,
+                                     "best_cv_values": None, "best_data_set": None}
             print(cla_name)
 
-            for data_set_name, data_set in zip([f"Cross_{i}" for i in range(1, 4)] +
+            for i, (data_set_name, data_set) in enumerate(zip([f"Cross_{i}" for i in range(1, 4)] +
                     [f"Square_{i}" for i in range(1, 4)] +
-                    [f"Diamond_{i}" for i in range(1, 4)], data_sets):
-                unique_values = np.unique(data_set)
-                preprocessor = preprocessing.LabelEncoder()
-                preprocessor.fit(unique_values)
-                transformed = preprocessor.transform(data_set.flatten())
-                transformed = transformed.reshape(data_set.shape)
-                np.random.shuffle(transformed)
+                    [f"Diamond_{i}" for i in range(1, 4)], data_sets)):
+                if len(results[cla_name]["grid_search"]) >= i+1:
+                    continue
+                else:
+                    unique_values = np.unique(data_set)
+                    preprocessor = preprocessing.LabelEncoder()
+                    preprocessor.fit(unique_values)
+                    transformed = preprocessor.transform(data_set.flatten())
+                    transformed = transformed.reshape(data_set.shape)
+                    np.random.shuffle(transformed)
 
-                clf = GridSearchCV(cla, parameter_grid, cv=10, n_jobs=-1)
-                clf.fit(transformed[:, :-1], transformed[:, -1])
-                results[cla_name]["grid_search"].append(clf.cv_results_)
+                    clf = GridSearchCV(cla, parameter_grid, cv=10, n_jobs=-1)
+                    clf.fit(transformed[:, :-1], transformed[:, -1])
+                    results[cla_name]["grid_search"].append(clf.cv_results_)
 
-                best_idx = np.argmax(clf.cv_results_["mean_test_score"])
-                best_parameters = clf.cv_results_["params"][best_idx]
-                best_mean_accuracy = clf.cv_results_["mean_test_score"][best_idx]
+                    best_idx = np.argmax(clf.cv_results_["mean_test_score"])
+                    best_parameters = clf.cv_results_["params"][best_idx]
+                    best_mean_accuracy = clf.cv_results_["mean_test_score"][best_idx]
 
-                if best_mean_accuracy > results[cla_name]["best_mean_accuracy"]:
-                    results[cla_name]["best_mean_accuracy"] = best_mean_accuracy
-                    results[cla_name]["best_parameters"] = best_parameters
-                    results[cla_name]["best_data_set"] = data_set_name
+                    if best_mean_accuracy > results[cla_name]["best_mean_accuracy"]:
+                        results[cla_name]["best_mean_accuracy"] = best_mean_accuracy
+                        results[cla_name]["best_parameters"] = best_parameters
+                        results[cla_name]["best_data_set"] = data_set_name
 
-                    stats = np.array([clf.cv_results_[f'split{x}_test_score'] for x in range(10)])
-                    results[cla_name]["best_cv_values"] = stats[:, best_idx]
+                        stats = np.array([clf.cv_results_[f'split{x}_test_score'] for x in range(10)])
+                        results[cla_name]["best_cv_values"] = stats[:, best_idx]
 
-                store_grid_search_results(game_name, results)
+                    store_grid_search_results(game_name, results)
 
         if os.path.exists(f"results/{game_name}/lock.txt"):
             os.remove(f"results/{game_name}/lock.txt")
